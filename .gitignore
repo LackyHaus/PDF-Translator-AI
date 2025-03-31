@@ -1,0 +1,6 @@
+__pycache__/
+Book/*
+output.md
+Книга.pdf
+
+!Book/.gitkeep
