@@ -12,6 +12,6 @@ for page_index in range(pdf.start_page, pdf.pages):
     print(f"Page {page_index}:")
     print(page_text)
     print("\n")
-    pdf.insert_text(page_index, page_text)
+    pdf.insert_text(page_index, translator.translate_text(page_text))
     input("Press Enter to continue...")
     #break  # Удалите эту строку, чтобы обработать все страницы

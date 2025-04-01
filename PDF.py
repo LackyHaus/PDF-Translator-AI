@@ -7,6 +7,7 @@ class PDF_Class:
         self.pdf_file = os.path.join("Book", input_pdf) # Путь в папку Book к PDF-файлу
         self.output_pdf = os.path.join("Book", hashlib.md5(self.pdf_file.encode()).hexdigest() + ".pdf") # Путь в папку Book к выходному PDF-файлу, имя хешируется
         self._font_path = "arialnarrow_bold.ttf"  # Путь к шрифту, который вы хотите использовать
+        self.page_text_data = None  # Переменная для хранения текстовых данных страницы
         self.start_page = 1
         self.pages = self.get_pages()
 
@@ -14,7 +15,7 @@ class PDF_Class:
             doc = fitz.open(self.output_pdf)
             page_count = doc.page_count
             doc.close()
-            self.start_page = page_count
+            self.start_page = page_count + 1
 
     
     def get_pages(self):
@@ -33,10 +34,10 @@ class PDF_Class:
         '''
         doc = fitz.open(self.pdf_file)
         page = doc.load_page(page_index - 1)
-        page_text_data = {}
+        self.page_text_data = {}
         text_instances = page.get_text("dict")
         full_text_page = page.get_text("text")
-        page_text_data["text_data"] = []
+        self.page_text_data["text_data"] = []
         
         if not text_instances.get("blocks"):
             return None
@@ -58,18 +59,22 @@ class PDF_Class:
                         'color': span["color"]
                     })
                 if line_data:
-                    page_text_data['text_data'].extend(line_data)
-        
-        page_text_data["full_text_page"] = full_text_page.strip()
+                    self.page_text_data['text_data'].extend(line_data)
         
         # DeBug
         with open("output.md", "w", encoding="utf-8") as f:
-            f.write(str(page_text_data))
-        
+            f.write(str(self.page_text_data))
         doc.close()
-        return page_text_data # Возвращает словарь с текстовыми данными и их атрибутами
 
-    def insert_text(self, page_index:int, text_data:dict):
+        only_text = []
+        for text in self.page_text_data['text_data']:
+            only_text.append(text["text"])
+
+        text_for_translate = {"text": only_text, "full_text_page": full_text_page.strip()}
+
+        return text_for_translate # Возвращает текст для перевода
+
+    def insert_text(self, page_index:int, translated_text:dict):
         '''
         Вставляет текст на указанную страницу PDF-файла.
         Удаляет оригинальный текст и добавляет новый.'
@@ -77,10 +82,10 @@ class PDF_Class:
         doc = fitz.open(self.pdf_file)
         page = doc.load_page(page_index - 1)  # загрузка конкретной страницы
         
-        if text_data is not None:
+        if translated_text is not None:
 
             # Удаление оригинального текста
-            for item in text_data['text_data']:
+            for item in self.page_text_data['text_data']:
                 rect = fitz.Rect(item['bbox'])
                 page.add_redact_annot(rect, fill=(1, 1, 1))
             page.apply_redactions()
@@ -88,11 +93,15 @@ class PDF_Class:
             page.insert_font(fontfile=self._font_path, fontname="F0")
             
             # Вставка текста
-            for item in text_data['text_data']:
+            for index, item in enumerate(self.page_text_data['text_data']):
                 x0, y0 = item['origin']
                 fontsize = item['fontsize']
                 color = item['color']
-                text = item['text']
+
+                if (index > len(translated_text['text'])-1):
+                    break
+                
+                text = translated_text['text'][index]
                 r = (color >> 16) & 0xFF
                 g = (color >> 8) & 0xFF
                 b = color & 0xFF
