@@ -98,10 +98,11 @@ class PDF_Class:
                 fontsize = item['fontsize']
                 color = item['color']
 
-                if (index > len(translated_text['text'])-1):
+                if (index > len(translated_text)-1):
+                    print(f"\n\nIndex {index} out of range for translated_text!!!\n\n")
                     break
                 
-                text = translated_text['text'][index]
+                text = translated_text[index]
                 r = (color >> 16) & 0xFF
                 g = (color >> 8) & 0xFF
                 b = color & 0xFF

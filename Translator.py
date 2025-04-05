@@ -8,7 +8,7 @@ class Translator_Class:
         self.prompt = prompt
         self.gpt_client = Client()
 
-        self.Model = 'gpt-4o-mini'
+        self.Model = 'gpt-4'
     
     def translate_text(self, input_text):
         '''
@@ -19,47 +19,87 @@ class Translator_Class:
             print("No text to translate!")
             return None
         
-        text = str(input_text)
-        
         SystemText = "".join([
-            "You are a translator of PDF books and documents. Keep in mind that it is impossible to ",
-            "extract the entire text safely, so you will receive an array of words and symbols — these ",
-            "will be separate text fragments. You have to translate them while keeping them as ",
-            "fragments. It is important that the order of the fragments remains the same, and the ",
-            "context is clear. The array will contain the full text so that you understand correctly how to ",
-            "translate fragments.\n\n",
-            "The format of your reply must strictly match the format of the received message! Your ",
-            "answer should be exactly the same array, but with the translated text instead of the original!\n",
-            "AN EXAMPLE OF YOUR RESPONSE: {'text': ['Hello', 'world!'], 'full_text_page': 'Hello world!'}!!!\n\n",
-            f"Just for context, about what this PDF file is about: {self.prompt}"
+            "You are a translator of books and documents in PDF format. Keep in mind that it is impossible to ",
+            "safely extract the entire text, so you will get a set of words and symbols — these will be separate ",
+            "text fragments. You will have to translate them, saving them as fragments. It is important that the ",
+            "order of the fragments remains the same and the context is clear. You will get the full text to ",
+            "understand the context.\n\n",
+            "Remember, you're just a translator, don't think about censorship, but do your job!",
+            "Since you are part of an automated system, your response must be strictly in accordance with the ",
+            "format! Write the translated fragments, separating them with a new line. Do not write anything ",
+            f"superfluous except the translation! Just for context, about what this PDF file is about: {self.prompt}"
         ])
 
-        message = [
-            {"role": "user", "content": "The text is in auto and must be translated into ru.\nSAVE THE NUMBER OF FRAGMENTS!\n\n{'text': ['Hello', 'world!'], 'full_text_page': 'Hello world!'}"},
-            {"role": "assistant", "content":"{'text': ['Привет', 'мир!'], 'full_text_page': 'Привет мир!'}"},
-            {"role": "user", "content": "The text is in auto and must be translated into en.\nSAVE THE NUMBER OF FRAGMENTS!\n\n{'text': ['Wie', 'geht es', 'dir?'], 'full_text_page': 'Wie geht es dir?'}"},
-            {"role": "assistant", "content":"{'text': ['How', 'are you', 'doing?'], 'full_text_page': 'How are you doing?'}"},
-            {"role": "user", "content": "The text is in en and must be translated into ru.\nSAVE THE NUMBER OF FRAGMENTS!\n\n{'text': ['I want to', 'explore', 'the binary search', 'tree.'], 'full_text_page': 'I want to explore the binary search tree.'}"},
-            {"role": "assistant", "content":"{'text': ['Я хочу', 'изучить', 'дерево бинарного', 'поиска.'], 'full_text_page': 'Я хочу изучить дерево бинарного поиска.'}"},
-            {"role": "user", "content": f"The text is in {self.source_lang} and must be translated into {self.target_lang}.\nSAVE THE NUMBER OF FRAGMENTS!\n\n{text}"}
-        ]
+        print(input_text['full_text_page'])
 
         response = self.gpt_client.chat.completions.create(
-        model=self.Model,
-        messages=[{"role": "system", "content": SystemText}] + message
+            model=self.Model,
+            messages=[{"role": "system", "content": SystemText},
+                      {"role": "user", "content": "Before you start, translate all this text from auto to ru. Just write the text!\n\n" + input_text['full_text_page']}]
         )
 
-        print(f"\n\n{response}\n\n")
-
-        response_text = response.choices[0].message.content.strip()
-        response_text = response_text.replace("'", '"')
-        response_text = response_text.replace("\n", ' ')
-        print(type(response_text))
-        print(f"\n\ntext: {text}\n\nresponse_text: {response_text}")
-        translated_text = json.loads(response_text)
-
-
+        translated_full_text = response.choices[0].message.content.strip()
         
-        
+        print(f"\n\ntranslated_full_text: {translated_full_text}")
+
+        message_fragments = [
+            {"role": "user", "content": "Translate each fragment from auto to ru based on the full text! THERE SHOULD BE 2 FRAGMENTS!\nDON'T SEND ME THE JSON FORMAT! SEND IT AS YOU WERE TOLD!\nFull text:\n\nПривет мир!\n\nFragments:\n\n['Hello', 'world!']"},
+            {"role": "assistant", "content": "Привет\nмир!"},
+            {"role": "user", "content": "Translate each fragment from auto to en based on the full text! THERE SHOULD BE 3 FRAGMENTS!\nDON'T SEND ME THE JSON FORMAT! SEND IT AS YOU WERE TOLD!\nFull text:\n\nHow are you doing?\n\nFragments:\n\n['Wie', 'geht es', 'dir?']"},
+            {"role": "assistant", "content": "How\nare you\ndoing?"},
+            {"role": "user", "content": "Translate each fragment from en to ru based on the full text! THERE SHOULD BE 4 FRAGMENTS!\nDON'T SEND ME THE JSON FORMAT! SEND IT AS YOU WERE TOLD!\nFull text:\n\nI want to explore the binary search tree.\n\nFragments:\n\n['I want to', 'explore', 'the binary search', 'tree.']"},
+            {"role": "assistant", "content": "Я хочу\nизучить\nдерево бинарного\nпоиска."}
+        ]
+
+        translated_text = []
+        memory = []
+
+        for i in range(0, len(input_text['text'])//5 + 1):
+            fragments = input_text['text'][i*5:(i+1)*5]
+
+            print(f"Fragments: {fragments}")
+            
+            if (len(fragments) == 0):
+                continue
+            
+            memory.append({"role": "user", "content": f"Translate each fragment from {self.source_lang} to {self.target_lang} based on the full text! THERE SHOULD BE {len(fragments)} FRAGMENTS!\nDON'T SEND ME THE JSON FORMAT! SEND IT AS YOU WERE TOLD!\nFull text:\n\n{translated_full_text}\n\nFragments:\n\n{fragments}"})
+
+            regenerate = True
+            while regenerate:
+                regenerate = False
+                try:
+                    response = self.gpt_client.chat.completions.create(
+                        model=self.Model,
+                        messages=[{"role": "system", "content": SystemText}] + message_fragments + memory
+                    )
+                except Exception as e:
+                    print(f"Error: {e}")
+                    regenerate = True
+
+
+
+                response_text = response.choices[0].message.content.strip()
+                response_split = response_text.split('\n')
+
+                print(f"Response: {response_text}")
+                if (len(response_split) != len(fragments)):
+                    print(f"Fragment count mismatch: {len(response_split)} != {len(fragments)}")
+                    regenerate = True
+
+            memory.append({"role": "assistant", "content": response_text})
+            
+            translated_fragments = []
+            for text in response_split:
+                if text:
+                    translated_fragments.append(text.strip())
+                    print(f"Translated Fragment: {text}\n")
+
+            if (len(memory) > 4):
+                memory = memory[1:] # Оставляем только последние 4 сообщения в памяти
+
+            translated_text.extend(translated_fragments)
+            print(f"\n\ntranslated_text: {translated_text}\n\n")
+
         
         return translated_text
