@@ -8,7 +8,7 @@ class Translator_Class:
         self.prompt = prompt
         self.gpt_client = Client()
 
-        self.Model = 'gpt-4'
+        self.Model = 'deepseek-v3'
     
     def translate_text(self, input_text):
         '''
@@ -65,13 +65,14 @@ class Translator_Class:
             
             memory.append({"role": "user", "content": f"Translate each fragment from {self.source_lang} to {self.target_lang} based on the full text! THERE SHOULD BE {len(fragments)} FRAGMENTS!\nDON'T SEND ME THE JSON FORMAT! SEND IT AS YOU WERE TOLD!\nFull text:\n\n{translated_full_text}\n\nFragments:\n\n{fragments}"})
 
+            temp_memory = memory.copy()
             regenerate = True
             while regenerate:
                 regenerate = False
                 try:
                     response = self.gpt_client.chat.completions.create(
                         model=self.Model,
-                        messages=[{"role": "system", "content": SystemText}] + message_fragments + memory
+                        messages=[{"role": "system", "content": SystemText}] + message_fragments + temp_memory
                     )
                 except Exception as e:
                     print(f"Error: {e}")
@@ -83,8 +84,23 @@ class Translator_Class:
                 response_split = response_text.split('\n')
 
                 print(f"Response: {response_text}")
+
+                if (response_split[0].find("Started thinking...") != -1): # Если в ответе есть "Started thinking...", то удаляем все после него
+                    for index, t in enumerate(response_split):
+                        if (t.find("Done in") != -1):
+                            response_split = response_split[index+1:] # Удаляем все до "Done in"
+                            print(f"Response split before removing thinking: {response_split}")
+                            break
+                for index, t in enumerate(response_split): # Удаляем пустые строки
+                    if (t == ""):
+                        response_split.pop(index)
+                    
+                    
+
                 if (len(response_split) != len(fragments)):
-                    print(f"Fragment count mismatch: {len(response_split)} != {len(fragments)}")
+                    print(f"Fragment count mismatch: {len(response_split)} != {len(fragments)}\nResponse split: {response_split}\nFragments: {fragments}")
+                    temp_memory.append({"role": "assistant", "content": response_text})
+                    temp_memory.append({"role": "user", "content": f"YOU ONLY WROTE {len(response_split)} FRAGMENTS OUT OF {len(fragments)}! {len(fragments)} FRAGMENTS ARE NEEDED!\nFull text:\n\n{translated_full_text}\n\nFragments:\n\n{fragments}"})
                     regenerate = True
 
             memory.append({"role": "assistant", "content": response_text})
